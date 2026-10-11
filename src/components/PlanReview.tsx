@@ -42,11 +42,7 @@ export function PlanReview({ t }: { t: Ticket }) {
           }
         >
           <Md>{t.review.summary}</Md>
-          {t.tests && (
-            <p className="whitespace-pre-wrap text-gray-600">
-              <strong className="text-gray-900">Test validity:</strong> {t.tests}
-            </p>
-          )}
+          {t.tests && <TestValidity note={t.tests} />}
           {t.review.findings.length > 0 && (
             <ul className="space-y-2">
               {t.review.findings.map((f, i) => (
@@ -58,6 +54,27 @@ export function PlanReview({ t }: { t: Ticket }) {
             </ul>
           )}
         </Card>
+      )}
+    </div>
+  )
+}
+
+/** The verdict, and the base code's test output folded away (pipeline.test_validity puts a blank line between). */
+function TestValidity({ note }: { note: string }) {
+  const [verdict, ...rest] = note.split('\n\n')
+  const output = rest.join('\n\n')
+  return (
+    <div className="space-y-1 text-gray-600">
+      <p>
+        <strong className="text-gray-900">Test validity:</strong> {verdict}
+      </p>
+      {output && (
+        <details>
+          <summary className="cursor-pointer">Test output on the unchanged base code</summary>
+          <pre className="mt-2 max-h-96 overflow-auto rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-xs">
+            {output}
+          </pre>
+        </details>
       )}
     </div>
   )
