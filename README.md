@@ -1,13 +1,13 @@
 # handoff-ui
 
-The web UI for [handoff](../handoff): the ticket queue, each ticket's live feed (agent notes, files read, edits,
+The web UI for [handoff](../handoff-server): the ticket queue, each ticket's live feed (agent notes, files read, edits,
 command output), its changes, plan and review. It answers the agent's questions and retries failed tickets.
 
 React + TypeScript + Vite. It talks only to the handoff API, under `/api`, which Vite forwards to `HANDOFF_API`.
 
 ## Running
 
-Start the handoff server first (`.venv/bin/handoff` in the handoff repository), then:
+Start the handoff server first (`.venv/bin/handoff` in the handoff-server repository), then:
 
 ```sh
 npm ci
