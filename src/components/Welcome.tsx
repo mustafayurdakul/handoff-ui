@@ -17,7 +17,7 @@ export function Welcome() {
           <code className="font-mono">inbox/</code> in the handoff folder).
         </li>
       </ol>
-      <pre className="rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-xs">cp demo/tickets/APP-1.md inbox/</pre>
+      <pre className="rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-xs">cp demo/tickets/MAINT-101.md inbox/</pre>
     </div>
   )
 }
