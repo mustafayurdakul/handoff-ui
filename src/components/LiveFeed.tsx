@@ -1,9 +1,9 @@
-import { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Markdown from 'react-markdown'
+import { STAGE_LABEL, type CmdEvent, type FeedEvent, type ResultEvent, type StageEvent, type TextEvent, type ToolEvent } from '../api'
+import { clock } from '../lib/format'
 import { AnsiLine } from './AnsiLine'
 import { CodeLines, EditDiff } from './DiffView'
-import type { CmdEvent, FeedEvent, ResultEvent, StageEvent, TextEvent, ToolEvent } from '../api'
-import { clock } from '../lib/format'
 
 type Block =
   | { type: 'stage' | 'info'; ev: StageEvent }
@@ -11,6 +11,7 @@ type Block =
   | { type: 'tool'; ev: ToolEvent; result?: ResultEvent }
   | { type: 'cmd'; ev: CmdEvent; lines: string[]; ok?: boolean }
 
+/** Groups the events: a tool call with its result, a command with its output lines and exit. */
 function toBlocks(events: FeedEvent[]): Block[] {
   const blocks: Block[] = []
   const tools = new Map<string, Extract<Block, { type: 'tool' }>>()
@@ -36,19 +37,6 @@ function toBlocks(events: FeedEvent[]): Block[] {
   return blocks
 }
 
-const STAGE_NAME: Record<string, string> = {
-  queued: 'Queue',
-  triage: 'Triage',
-  coding: 'Coding',
-  checking: 'Checks',
-  review: 'Review',
-  delivering: 'Delivery',
-  done: 'Done',
-  question: 'Question',
-  rejected: 'Rejected',
-  failed: 'Failed',
-}
-
 export function LiveFeed({ events, live }: { events: FeedEvent[]; live: boolean }) {
   const blocks = useMemo(() => toBlocks(events), [events])
   const ref = useRef<HTMLDivElement>(null)
@@ -64,20 +52,27 @@ export function LiveFeed({ events, live }: { events: FeedEvent[]; live: boolean 
   }
 
   return (
-    <div className="feed-wrap">
-      <div className="feed" ref={ref} onScroll={onScroll} role="log" aria-live="polite" aria-label="Live feed">
-        {blocks.length === 0 && <p className="feed-empty">No events yet.</p>}
+    <div className="relative h-full">
+      {/* aria-live off: a screen reader would read every output line; the stage pill announces progress */}
+      <div
+        className="h-full space-y-3 overflow-y-auto px-6 py-4 text-sm"
+        ref={ref}
+        onScroll={onScroll}
+        role="log"
+        aria-live="off"
+        aria-label="Live feed"
+      >
+        {blocks.length === 0 && <p className="text-gray-500">No events yet.</p>}
         {blocks.map((b, i) => (
           <FeedBlock key={i} block={b} live={live} />
         ))}
-        {live && (
-          <div className="feed-cursor" aria-hidden>
-            <span className="dot-pulse" /> working
-          </div>
-        )}
+        {live && <p className="animate-pulse text-gray-400">working…</p>}
       </div>
       {!pinned && (
-        <button className="to-bottom" onClick={() => setPinned(true)}>
+        <button
+          className="absolute right-6 bottom-4 rounded-full border border-gray-300 bg-white px-3 py-1 text-xs shadow-sm"
+          onClick={() => setPinned(true)}
+        >
           ↓ Latest events
         </button>
       )}
@@ -85,36 +80,45 @@ export function LiveFeed({ events, live }: { events: FeedEvent[]; live: boolean 
   )
 }
 
-function Time({ ts }: { ts: number }) {
-  return <time className="ev-time">{clock(ts)}</time>
+function Row({ ts, children }: { ts: number; children: ReactNode }) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-2">
+      <time className="shrink-0 font-mono text-xs text-gray-400">{clock(ts)}</time>
+      {children}
+    </div>
+  )
+}
+
+function Badge({ children }: { children: ReactNode }) {
+  return <span className="shrink-0 rounded bg-gray-100 px-1.5 text-xs font-medium text-gray-700">{children}</span>
+}
+
+const STATUS = { pending: 'text-gray-400', good: 'text-green-700', bad: 'text-red-700', warn: 'text-amber-700' }
+
+function Status({ tone, children }: { tone: keyof typeof STATUS; children: ReactNode }) {
+  return <span className={`shrink-0 text-xs ${STATUS[tone]}`}>{children}</span>
 }
 
 function FeedBlock({ block: b, live }: { block: Block; live: boolean }) {
   switch (b.type) {
     case 'stage':
       return (
-        <div className="ev-stage">
-          <span className="ev-stage-label">{STAGE_NAME[b.ev.stage] ?? b.ev.stage}</span>
-          <span className="ev-stage-msg">{b.ev.msg}</span>
-          <Time ts={b.ev.ts} />
+        <div className="flex items-baseline gap-2 border-t border-gray-200 pt-3 first:border-0 first:pt-0">
+          <span className="font-semibold">{STAGE_LABEL[b.ev.stage]}</span>
+          <span className="flex-1 text-gray-600">{b.ev.msg}</span>
+          <time className="font-mono text-xs text-gray-400">{clock(b.ev.ts)}</time>
         </div>
       )
     case 'info':
       return (
-        <div className="ev-row muted">
-          <Time ts={b.ev.ts} />
-          <span>{b.ev.msg}</span>
-        </div>
+        <Row ts={b.ev.ts}>
+          <span className="text-gray-500">{b.ev.msg}</span>
+        </Row>
       )
     case 'text':
       return (
-        <div className="ev-text">
-          <span className="avatar" aria-hidden>
-            C
-          </span>
-          <div className="md">
-            <Markdown>{b.ev.text}</Markdown>
-          </div>
+        <div className="md text-gray-800">
+          <Markdown>{b.ev.text}</Markdown>
         </div>
       )
     case 'tool':
@@ -124,19 +128,17 @@ function FeedBlock({ block: b, live }: { block: Block; live: boolean }) {
   }
 }
 
-const TAIL = 40
-
 function ToolBlock({ ev, result, live }: { ev: ToolEvent; result?: ResultEvent; live: boolean }) {
   const i = ev.input
   const target = i.file_path ?? i.command ?? i.pattern ?? ''
-  const pending = !result && live
-  const status = pending ? (
-    <span className="ev-status pending">running…</span>
-  ) : result?.is_error ? (
-    <span className="ev-status bad">error</span>
-  ) : ev.name === 'Read' || ev.name === 'Glob' || ev.name === 'Grep' ? (
-    <span className="ev-status">{summary(ev.name, result?.output)}</span>
-  ) : null
+  const status =
+    !result && live ? (
+      <Status tone="pending">running…</Status>
+    ) : result?.is_error ? (
+      <Status tone="bad">error</Status>
+    ) : ev.name === 'Read' || ev.name === 'Glob' || ev.name === 'Grep' ? (
+      <Status tone="pending">{summary(ev.name, result?.output)}</Status>
+    ) : null
 
   let body = null
   if (ev.name === 'Edit' && i.old_string !== undefined) {
@@ -147,26 +149,22 @@ function ToolBlock({ ev, result, live }: { ev: ToolEvent; result?: ResultEvent; 
   } else if (ev.name === 'Bash' && result?.output) {
     body = <Output lines={result.output.replace(/\n$/, '').split('\n')} bad={result.is_error} />
   }
-  const showError = result?.is_error && ev.name !== 'Bash'
+  // a failed Edit or Read says why below its input; Bash shows its error output as the body
+  const error = result?.is_error && ev.name !== 'Bash' && <Output lines={result.output.split('\n')} bad />
 
   return (
-    <div className="ev-tool">
-      <div className="ev-row">
-        <Time ts={ev.ts} />
-        <span className={`badge tool-${ev.name.toLowerCase()}`}>{ev.name}</span>
-        <span className="ev-target mono">
-          {ev.name === 'Bash' && <span className="prompt">$ </span>}
+    <div className="space-y-1.5">
+      <Row ts={ev.ts}>
+        <Badge>{ev.name}</Badge>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs">
+          {ev.name === 'Bash' && <span className="text-gray-400">$ </span>}
           {target}
         </span>
         {status}
-      </div>
-      {ev.name === 'Bash' && i.description && <div className="ev-desc">{i.description}</div>}
-      {body && <div className="ev-body">{body}</div>}
-      {showError && (
-        <div className="ev-body">
-          <Output lines={result.output.split('\n')} bad />
-        </div>
-      )}
+      </Row>
+      {ev.name === 'Bash' && i.description && <p className="text-xs text-gray-500">{i.description}</p>}
+      {body}
+      {error}
     </div>
   )
 }
@@ -178,51 +176,52 @@ function summary(name: string, output?: string) {
   return n === 0 ? 'no results' : n === 1 ? '1 result' : `${n} results`
 }
 
+/** expect_fail: the new tests run on the code before the change, where failing is the good outcome. */
+function cmdStatus(ev: CmdEvent, ok: boolean | undefined, live: boolean) {
+  if (ok === undefined) return live && <Status tone="pending">running…</Status>
+  if (ev.expect_fail)
+    return ok ? (
+      <Status tone="warn">⚠ also passed on the base code</Status>
+    ) : (
+      <Status tone="good">✓ failed as expected</Status>
+    )
+  return ok ? <Status tone="good">✓ passed</Status> : <Status tone="bad">✗ failed</Status>
+}
+
 function CmdBlock({ ev, lines, ok, live }: { ev: CmdEvent; lines: string[]; ok?: boolean; live: boolean }) {
   return (
-    <div className="ev-cmd">
-      <div className="ev-row">
-        <Time ts={ev.ts} />
-        <span className="badge tool-pipeline">{ev.label ?? (ev.stage === 'checking' ? 'Check' : 'Setup')}</span>
-        <span className="ev-target mono">
-          <span className="prompt">$ </span>
+    <div className="space-y-1.5">
+      <Row ts={ev.ts}>
+        <Badge>{ev.label ?? (ev.stage === 'checking' ? 'Check' : 'Setup')}</Badge>
+        <span className="min-w-0 flex-1 truncate font-mono text-xs">
+          <span className="text-gray-400">$ </span>
           {ev.cmd}
         </span>
-        {ok === undefined ? (
-          live && <span className="ev-status pending">running…</span>
-        ) : ev.expect_fail ? (
-          ok ? (
-            <span className="ev-status warn">⚠ also passed on the base code</span>
-          ) : (
-            <span className="ev-status good">✓ failed as expected</span>
-          )
-        ) : ok ? (
-          <span className="ev-status good">✓ passed</span>
-        ) : (
-          <span className="ev-status bad">✗ failed</span>
-        )}
-      </div>
-      {lines.length > 0 && (
-        <div className="ev-body">
-          <Output lines={lines} ansi />
-        </div>
-      )}
+        {cmdStatus(ev, ok, live)}
+      </Row>
+      {lines.length > 0 && <Output lines={lines} ansi />}
     </div>
   )
 }
+
+const TAIL = 40 // output lines shown until "Show more"
 
 function Output({ lines, bad, ansi }: { lines: string[]; bad?: boolean; ansi?: boolean }) {
   const [all, setAll] = useState(false)
   const hidden = all ? 0 : Math.max(0, lines.length - TAIL)
   return (
-    <div className={`term mono${bad ? ' bad' : ''}`}>
+    <div
+      className={`overflow-x-auto rounded-md border bg-gray-50 p-3 font-mono text-xs leading-5 ${
+        bad ? 'border-red-200 text-red-800' : 'border-gray-200'
+      }`}
+    >
       {hidden > 0 && (
-        <button className="term-more" onClick={() => setAll(true)}>
+        <button className="mb-1 text-gray-500 underline" onClick={() => setAll(true)}>
           Show {hidden} more lines
         </button>
       )}
       {lines.slice(hidden).map((l, i) => (
-        <div key={i} className="term-line">
+        <div key={i} className="whitespace-pre">
           {ansi ? <AnsiLine text={l} /> : l || ' '}
         </div>
       ))}

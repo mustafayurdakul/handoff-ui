@@ -1,72 +1,88 @@
+import type { ReactNode } from 'react'
 import Markdown from 'react-markdown'
 import type { Ticket } from '../api'
 
-const DECISION = { go: 'Ready to implement', question: 'Has questions', reject: 'Rejected' }
+const DECISION = {
+  go: { label: 'Ready to implement', color: 'bg-green-50 text-green-700' },
+  question: { label: 'Has questions', color: 'bg-amber-50 text-amber-800' },
+  reject: { label: 'Rejected', color: 'bg-gray-100 text-gray-600' },
+}
+const SEVERITY = { blocker: 'bg-red-50 text-red-700', minor: 'bg-gray-100 text-gray-600' }
 
 /** Triage's decision and plan, the agent's summary of its changes, and the review. */
 export function PlanReview({ t }: { t: Ticket }) {
+  const decision = t.triage && DECISION[t.triage.decision]
   return (
-    <div className="scroll pad stack">
-      {t.triage && (
-        <section className="card">
-          <header className="card-head">
-            <h2>Triage</h2>
-            <span className={`pill decision-${t.triage.decision}`}>{DECISION[t.triage.decision]}</span>
-          </header>
-          <div className="md">
-            <Markdown>{t.triage.summary}</Markdown>
-          </div>
+    <div className="max-w-3xl space-y-4 text-sm">
+      {t.triage && decision && (
+        <Card title="Triage" pill={<Pill color={decision.color}>{decision.label}</Pill>}>
+          <Md>{t.triage.summary}</Md>
           {t.triage.plan && (
             <>
-              <h3>Plan</h3>
-              <div className="md">
-                <Markdown>{t.triage.plan}</Markdown>
-              </div>
+              <h3 className="font-semibold">Plan</h3>
+              <Md>{t.triage.plan}</Md>
             </>
           )}
-        </section>
+        </Card>
       )}
       {t.work && (
-        <section className="card">
-          <header className="card-head">
-            <h2>Changes</h2>
-          </header>
-          <div className="md">
-            <Markdown>{t.work}</Markdown>
-          </div>
-        </section>
+        <Card title="Changes">
+          <Md>{t.work}</Md>
+        </Card>
       )}
       {t.review && (
-        <section className="card">
-          <header className="card-head">
-            <h2>Review</h2>
-            <span className={`pill ${t.review.approved ? 'decision-go' : 'decision-reject'}`}>
-              {t.review.approved ? 'Approved' : 'Changes requested'}
-            </span>
-          </header>
-          <div className="md">
-            <Markdown>{t.review.summary}</Markdown>
-          </div>
+        <Card
+          title="Review"
+          pill={
+            t.review.approved ? (
+              <Pill color={DECISION.go.color}>Approved</Pill>
+            ) : (
+              <Pill color={SEVERITY.blocker}>Changes requested</Pill>
+            )
+          }
+        >
+          <Md>{t.review.summary}</Md>
           {t.tests && (
-            <p className="tests-note">
-              <strong>Test validity:</strong> {t.tests}
+            <p className="whitespace-pre-wrap text-gray-600">
+              <strong className="text-gray-900">Test validity:</strong> {t.tests}
             </p>
           )}
           {t.review.findings.length > 0 && (
-            <ul className="findings">
+            <ul className="space-y-2">
               {t.review.findings.map((f, i) => (
-                <li key={i}>
-                  <span className={`badge sev-${f.severity}`}>{f.severity}</span>
-                  <code>{f.file}</code>
-                  <div className="md">
-                    <Markdown>{f.message}</Markdown>
-                  </div>
+                <li key={i} className="space-y-1">
+                  <Pill color={SEVERITY[f.severity]}>{f.severity}</Pill> <code className="font-mono text-xs">{f.file}</code>
+                  <Md>{f.message}</Md>
                 </li>
               ))}
             </ul>
           )}
-        </section>
+        </Card>
       )}
+    </div>
+  )
+}
+
+function Card({ title, pill, children }: { title: string; pill?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="space-y-3 rounded-md border border-gray-200 p-4">
+      <header className="flex items-center justify-between gap-3">
+        <h2 className="font-semibold">{title}</h2>
+        {pill}
+      </header>
+      {children}
+    </section>
+  )
+}
+
+function Pill({ color, children }: { color: string; children: ReactNode }) {
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>{children}</span>
+}
+
+function Md({ children }: { children: string }) {
+  return (
+    <div className="md">
+      <Markdown>{children}</Markdown>
     </div>
   )
 }

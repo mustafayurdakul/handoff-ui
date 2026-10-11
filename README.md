@@ -3,7 +3,7 @@
 The web UI for [handoff](../handoff-server): the ticket queue, each ticket's live feed (agent notes, files read, edits,
 command output), its changes, plan and review. It answers the agent's questions and retries failed tickets.
 
-React + TypeScript + Vite. It talks only to the handoff API, under `/api`, which Vite forwards to `HANDOFF_API`.
+React + TypeScript + Vite, styled with Tailwind CSS. It talks only to the handoff API, under `/api`, which Vite forwards to `HANDOFF_API`.
 
 ## Running
 
@@ -21,13 +21,14 @@ For a demo without the dev server: `npm run build && npm run preview` (same addr
 
 ```
 src/
-  main.tsx              entry: fonts, styles, <App/>
+  main.tsx              entry: styles, <App/>
   App.tsx               layout: ticket list beside the selected ticket; one screen at a time on phones
   api.ts                API types, polling, the live feed (SSE), POST
-  styles.css            the whole stylesheet: one dark theme, phone layout below 760px
+  styles.css            Tailwind, and the styles for rendered markdown (.md); the rest is utility classes
   components/
     TicketList.tsx      the sidebar, tickets grouped by stage
     TicketView.tsx      one ticket: header, tabs
+    StagePill.tsx       the colored stage label
     Stepper.tsx         progress through the five steps
     Banners.tsx         answer form, ready-to-merge note, error with Retry
     LiveFeed.tsx        the live feed
@@ -38,11 +39,13 @@ src/
   lib/
     format.ts           token counts, times, a ticking clock
     parseDiff.ts        `git diff` output to files and numbered lines
+test/                   unit tests, run by Node itself (`npm test`)
 ```
 
 ## Checks
 
 ```sh
 npm run lint
+npm test                 # Node 24+ runs the TypeScript tests directly
 npm run build            # type-checks, then bundles into dist/
 ```
